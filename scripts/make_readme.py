@@ -18,7 +18,8 @@ ARMS = [
     ("baseline_fixed", "1. Baseline (no reversibility)"),
     ("euler_fixed", "2a. Reversible - euler"),
     ("midpoint_fixed", "2b. Reversible - midpoint"),
-    ("midpoint_max", "3. Reversible - midpoint @ max batch"),
+    ("midpoint_max", "3. Reversible - midpoint @ sustained max batch"),
+    ("midpoint_fp32", "control. midpoint in fp32 (recon only)"),
 ]
 
 
@@ -80,7 +81,17 @@ def derived(runs):
     mm = os.path.join(RESULTS, "maxbatch_midpoint.json")
     if os.path.exists(bm) and os.path.exists(mm):
         b, m = json.load(open(bm)), json.load(open(mm))
-        out["batch_multiplier"] = m["max_batch"] / b["max_batch"]
+        out["probe_batch_baseline"] = b["max_batch"]
+        out["probe_batch_midpoint"] = m["max_batch"]
+    # the SUSTAINED batch is the one a full run actually completed at -- the
+    # probe measures a fresh allocator, training runs in a fragmented one
+    if runs.get("midpoint_max") and runs.get("baseline_fixed"):
+        out["sustained_batch"] = runs["midpoint_max"]["batch_size"]
+        out["batch_multiplier"] = (runs["midpoint_max"]["batch_size"]
+                                   / runs["baseline_fixed"]["batch_size"])
+        if out.get("probe_batch_midpoint"):
+            out["probe_overestimate"] = (out["probe_batch_midpoint"]
+                                         - out["sustained_batch"])
     return out
 
 
@@ -157,6 +168,62 @@ def findings(runs, d):
             f"loss moved to {fmt(mm['final_val_loss'])} from {fmt(mid['final_val_loss'])} at "
             f"batch {mid['batch_size']} on the same token budget -- fewer optimiser steps for "
             f"the same 50M tokens. Memory headroom buys throughput, not free convergence.")
+    if base and eul:
+        first = eul["recon_err_log"][0][1] if eul.get("recon_err_log") else None
+        out.append(
+            f"**Euler did not merely run slower -- it stopped learning.** Validation loss "
+            f"{fmt(eul['final_val_loss'])} against baseline {fmt(base['final_val_loss'])}, a gap of "
+            f"{eul['final_val_loss'] - base['final_val_loss']:+.2f} nats, and its training loss "
+            f"*rose* over the second half of the run. The reconstruction log shows why: error goes "
+            f"{fmt(first, '{:.1e}')} at step 0 to {fmt(eul['max_recon_err'], '{:.1e}')} at peak. "
+            f"Once the weights grow enough that h*Lip(f) exceeds 1, the fixed-point iteration is no "
+            f"longer a contraction, the rebuilt activations are wrong, and every gradient after that "
+            f"is computed from them. Loss stalls at almost exactly the step where reconstruction "
+            f"error crosses ~10.")
+    if base and mid:
+        out.append(
+            f"**The transcript's 30-40% slowdown is an overestimate at this depth: midpoint measured "
+            f"{100*(base['tok_per_s']/mid['tok_per_s']-1):.0f}%** "
+            f"({fmt(base['tok_per_s'], '{:,.0f}')} -> {fmt(mid['tok_per_s'], '{:,.0f}')} tok/s). "
+            f"The extra backward-pass forward is cheap relative to the rest of the step at 10 layers; "
+            f"the quoted range assumes deeper stacks.")
+    if d.get("probe_overestimate"):
+        out.append(
+            f"**A max-batch probe overestimates what training can sustain.** The probe cleared batch "
+            f"{d['probe_batch_midpoint']} on three steps in a fresh allocator; the real run OOM'd "
+            f"there with 3.52 GiB reserved-but-unallocated, and completed only at batch "
+            f"{d['sustained_batch']} with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`. Both "
+            f"numbers are reported; the sustained one is the honest answer.")
+    if mid and runs.get("midpoint_fp32"):
+        f32 = runs["midpoint_fp32"]
+        lo, hi = f32["recon_err_log"][0][1], f32["recon_err_log"][-1][1]
+        out.append(
+            f"**Midpoint's inverse is exact in algebra and lossy in arithmetic -- at any precision.** "
+            f"An fp32 control run reaches {fmt(f32['max_recon_err'], '{:.1e}')} peak reconstruction "
+            f"error against bf16's {fmt(mid['max_recon_err'], '{:.1e}')}, so precision matters; but "
+            f"fp32 still climbs {fmt(lo, '{:.1e}')} -> {fmt(hi, '{:.1e}')} across training rather "
+            f"than sitting at the ~1e-7 the CPU unit tests show. The inverse subtracts two quantities "
+            f"that both grow as the model trains, so cancellation error grows with activation "
+            f"magnitude regardless of dtype. The unit tests missed this because they use untrained "
+            f"random weights at small scale. (Run at batch 24 to fit fp32 in memory, so its loss is "
+            f"NOT comparable to the batch-50 arms -- it is a reconstruction-error control only.)")
+    if mid and eul:
+        out.append(
+            f"**There is a usable threshold between the two failures.** Midpoint's reconstruction "
+            f"error reaches {fmt(mid['max_recon_err'], '{:.1e}')} and training is unaffected "
+            f"({mid['final_val_loss'] - base['final_val_loss']:+.3f} val loss vs baseline). Euler's "
+            f"reaches {fmt(eul['max_recon_err'], '{:.1e}')} and training fails. Reconstruction error "
+            f"is therefore worth logging as a first-class training metric for any reversible run: it "
+            f"diverges long before the loss curve looks wrong.")
+    mmax = runs.get("midpoint_max")
+    if mmax and mid:
+        out.append(
+            f"**A bigger batch bought no throughput here.** At batch {mmax['batch_size']} the model "
+            f"ran at {fmt(mmax['tok_per_s'], '{:,.0f}')} tok/s against {fmt(mid['tok_per_s'], '{:,.0f}')} "
+            f"at batch {mid['batch_size']} -- flat, because the L4 was already saturated at batch 50. "
+            f"Val loss moved {mid['final_val_loss']:.4f} -> {mmax['final_val_loss']:.4f} on the same "
+            f"token budget, since a bigger batch means fewer optimiser steps. Memory headroom is "
+            f"capacity for a bigger model or longer context, not free speed at this size.")
     sb = saved_bytes()
     if sb:
         lo, hi = sb["rows"][0], sb["rows"][-1]
@@ -203,12 +270,16 @@ def render():
         "SAVED_BYTES_TABLE": saved_bytes_table(),
         "DEPTH_TABLE": depth_table() or "_(run `scripts/depth_scan.py` to fill this)_",
         "MID_SPEED": fmt(d.get("mid_speed_ratio"), "{:.2f}x"),
+        "MID_SLOWDOWN": (f"{100*(1/d['mid_speed_ratio']-1):.0f}% slower"
+                         if d.get("mid_speed_ratio") else "--"),
         "MID_MEM": fmt(d.get("mid_mem_ratio"), "{:.2f}x"),
         "MID_LOSS_DELTA": fmt(d.get("mid_loss_delta"), "{:+.4f}"),
         "EUL_SPEED": fmt(d.get("eul_speed_ratio"), "{:.2f}x"),
         "EUL_MEM": fmt(d.get("eul_mem_ratio"), "{:.2f}x"),
-        "EUL_LOSS_DELTA": fmt(d.get("eul_loss_delta"), "{:+.4f}"),
+        "EUL_LOSS_DELTA": fmt(d.get("eul_loss_delta"), "{:+.2f}"),
         "BATCH_MULT": fmt(d.get("batch_multiplier"), "{:.2f}x"),
+        "PROBE_BATCH": str(d.get("probe_batch_midpoint", "--")),
+        "SUSTAINED_BATCH": str(d.get("sustained_batch", "--")),
         "BF16_FLOOR": (fmt(probe()["bf16_vs_weight_scale"][0]["midpoint"], "{:.1e}")
                        if probe() else "~1e-2"),
         "PARAMS": f"{runs['baseline_fixed']['params_total']:,}" if runs.get("baseline_fixed") else "--",

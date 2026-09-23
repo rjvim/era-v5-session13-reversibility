@@ -1,0 +1,9 @@
+{
+  "mode": "baseline",
+  "seq_len": 512,
+  "max_batch": 50,
+  "peak_mem_gb_at_max": 16.94042205810547,
+  "device": "NVIDIA L4",
+  "dtype": "bf16",
+  "h": 0.5
+}

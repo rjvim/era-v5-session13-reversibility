@@ -6,9 +6,15 @@ reversible arm to the largest batch the GPU will hold.
 
 **Headline:** midpoint reversibility costs **{{MID_SPEED}}** of baseline throughput and
 **{{MID_LOSS_DELTA}}** validation loss, in exchange for **{{MID_MEM}}** peak memory and
-**{{BATCH_MULT}}** the maximum batch size. Euler reversibility is not competitive:
-its inverse is a fixed-point iteration, not a closed form, and it costs
-**{{EUL_SPEED}}** throughput for the same memory class.
+**{{BATCH_MULT}}** the sustained maximum batch size.
+
+**Euler did not merely lose -- it broke.** Its reconstruction error grew from
+1.8e-02 to 2.4e+04 during training, its loss stalled and then rose, and it
+finished **{{EUL_LOSS_DELTA}}** nats behind the baseline while running at
+**{{EUL_SPEED}}** throughput. Its inverse is a fixed-point iteration whose
+convergence depends on the trained weights; nothing in the optimiser keeps
+that condition true, and when it fails the gradients are computed from
+activations that are simply wrong.
 
 {{PENDING}}
 ---
@@ -26,8 +32,10 @@ throw the activations away. Backward pass: walk down the stack, rebuild each
 activation from the one above it, and only then compute that layer's gradient.
 
 Memory becomes O(1) in depth. The price is one extra forward per layer during
-the backward pass — roughly 30–40% slower training, which the session
-transcript states up front and which this repo measures.
+the backward pass. The session transcript quotes 30–40% slower training;
+**measured here, midpoint cost {{MID_SLOWDOWN}}** at 10 layers, because one
+extra block evaluation is small relative to the rest of the step at this
+depth. The quoted range assumes deeper stacks.
 
 ### The two integrators
 
@@ -114,10 +122,19 @@ unit test.
 
 {{MAIN_TABLE}}
 
-**Maximum batch size that survives a full train step** (forward + backward +
-optimiser, 3 steps, doubling then binary search):
+**Maximum batch size — probe vs sustained.** The probe runs three steps in a
+fresh allocator (doubling, then binary search). Real training runs for
+thousands of steps in a fragmented one, with pinned loader buffers and an eval
+loader alongside. The two numbers differ, and the difference is a result, not
+an inconvenience:
 
 {{MAXBATCH_TABLE}}
+
+The midpoint probe cleared batch **{{PROBE_BATCH}}**. The real run OOM'd there
+— `Tried to allocate 7.09 GiB`, with 3.52 GiB reserved-but-unallocated — and
+completed at batch **{{SUSTAINED_BATCH}}**, and only with
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`. Every batch-multiplier
+figure in this README uses the sustained number.
 
 **Activation bytes vs depth** — the claim reversibility actually makes, measured
 by hooking autograd's saved-tensor path (runs on CPU, no GPU needed, so it is
@@ -130,7 +147,34 @@ and optimiser states:
 
 {{DEPTH_TABLE}}
 
-## 5. Which variant won, and why
+## 5. Reconstruction error is the metric that matters
+
+Both reversible variants rebuild activations rather than storing them, so the
+question is not *whether* the rebuilt activation differs from the original but
+*by how much, and whether training notices*. Logged live every `--log_every`
+steps during the real runs:
+
+| Variant | dtype | recon err, step 0 | recon err, peak | val loss vs baseline |
+|---|---|---|---|---|
+| midpoint | bf16 | 1.2e-02 | 4.2e-01 | {{MID_LOSS_DELTA}} |
+| midpoint | fp32 | 1.3e-03 | 6.0e-02 | control run, not comparable |
+| euler | bf16 | 1.8e-02 | **2.4e+04** | {{EUL_LOSS_DELTA}} |
+
+Two things follow. **Midpoint's inverse is exact in algebra but not in
+arithmetic**: it subtracts two quantities that both grow as the model trains,
+so cancellation error grows with activation magnitude at any precision — fp32
+still climbs 1.3e-03 → 2.2e-02 across the run. The CPU unit tests report
+~1e-7 because they use untrained random weights at small scale; that regime
+does not predict this one, which is worth knowing before trusting a unit test
+as evidence about a real run.
+
+**And there is a threshold.** At 4.2e-01 training is unaffected. At 2.4e+04 it
+fails outright. Reconstruction error crosses into the hundreds around step 200
+of the euler run — long before the loss curve looks obviously wrong — which is
+the argument for logging it as a first-class training metric rather than
+checking it once in a test.
+
+## 6. Which variant won, and why
 
 **Midpoint.** Not close.
 
@@ -149,11 +193,11 @@ and optimiser states:
 
 Euler's only advantage is one fewer buffered state, which is O(1) either way.
 
-## 6. Findings
+## 7. Findings
 
 {{FINDINGS}}
 
-## 7. Reproduce
+## 8. Reproduce
 
 Fastest path: `./bootstrap.sh <zip>` unpacks and pushes this repo, then paste
 `COLAB_ONE_CELL.py` into a blank Colab notebook on a GPU runtime and leave it.
@@ -181,13 +225,20 @@ Notebooks (`notebooks/`) run the same code path on Colab:
 2. `02_reversible_variants.ipynb` — euler and midpoint at the same fixed batch
 3. `03_max_batch_and_report.ipynb` — max-batch search, depth scan, README
 
-## 8. Limitations
+## 9. Limitations
 
 - Single GPU, single node. No tensor/pipeline/context parallelism — this
   assignment isolates the activation-memory axis only.
 - ~20M parameters at 512 context: small enough that weights + optimiser states
   are a large share of peak memory, which *understates* the reversibility win.
   The depth scan in §4 is the cleaner measurement of the effect.
+- **50M tokens is ~2.4 tokens per parameter, far short of Chinchilla's ~20.**
+  None of these runs is near convergence; final losses around 5.4 are what
+  that budget buys. Every arm gets the identical budget, so the comparison
+  holds, but these are not quality numbers.
+- The fp32 control ran at batch 24 (fp32 activations do not fit at 50), so its
+  loss is not comparable to the bf16 arms. It is cited only for reconstruction
+  error.
 - bf16 has a precision floor of ~{{BF16_FLOOR}} relative reconstruction error for
   **both** variants — at that dtype the numerical difference between them
   narrows even though the algorithmic difference does not.

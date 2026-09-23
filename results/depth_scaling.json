@@ -1,0 +1,34 @@
+{
+  "batch_size": 8,
+  "seq_len": 512,
+  "n_embd": 256,
+  "dtype": "bf16",
+  "rows": [
+    {
+      "n_layer": 4,
+      "baseline": 2.6740217208862305,
+      "midpoint": 2.534613609313965
+    },
+    {
+      "n_layer": 8,
+      "baseline": 2.8564443588256836,
+      "midpoint": 2.5698156356811523
+    },
+    {
+      "n_layer": 16,
+      "baseline": 3.22128963470459,
+      "midpoint": 2.6402196884155273
+    },
+    {
+      "n_layer": 32,
+      "baseline": 3.9509801864624023,
+      "midpoint": 2.7810277938842773
+    },
+    {
+      "n_layer": 64,
+      "baseline": 5.410361289978027,
+      "midpoint": 3.0626440048217773
+    }
+  ],
+  "device": "NVIDIA L4"
+}

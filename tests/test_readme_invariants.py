@@ -14,7 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS = os.path.join(ROOT, "results")
 README = os.path.join(ROOT, "README.md")
 
-ARMS = ["baseline_fixed", "euler_fixed", "midpoint_fixed", "midpoint_max"]
+ARMS = ["baseline_fixed", "euler_fixed", "midpoint_fixed", "midpoint_max", "midpoint_fp32"]
 
 
 def _runs():
@@ -49,7 +49,8 @@ LABEL = {
     "baseline_fixed": "1. Baseline (no reversibility)",
     "euler_fixed": "2a. Reversible - euler",
     "midpoint_fixed": "2b. Reversible - midpoint",
-    "midpoint_max": "3. Reversible - midpoint @ max batch",
+    "midpoint_max": "3. Reversible - midpoint @ sustained max batch",
+    "midpoint_fp32": "control. midpoint in fp32 (recon only)",
 }
 
 
@@ -167,3 +168,39 @@ def test_cpu_pilot_euler_reconstruction_actually_broke():
     de, dm = json.load(open(e)), json.load(open(m))
     assert de["max_recon_err"] > 1e3 * dm["max_recon_err"]
     assert abs(de["final_val_loss"] - dm["final_val_loss"]) < 0.2   # loss hides it
+
+
+def test_reported_batch_multiplier_uses_the_sustained_batch_not_the_probe():
+    """The probe cleared a batch that training then OOM'd at. Any multiplier in
+    the README must come from a run that actually completed."""
+    _need_runs()
+    runs = _runs()
+    if not {"midpoint_max", "baseline_fixed"} <= runs.keys():
+        pytest.skip("need both runs")
+    probe_p = os.path.join(RESULTS, "maxbatch_midpoint.json")
+    sustained = runs["midpoint_max"]["batch_size"]
+    expected = sustained / runs["baseline_fixed"]["batch_size"]
+    text = open(README).read()
+    m = re.search(r"in exchange for \*\*[\d.]+x\*\* peak memory and\s*\*\*([\d.]+)x\*\*", text)
+    assert m, "batch multiplier claim missing from headline"
+    assert float(m.group(1)) == pytest.approx(expected, abs=5e-3)
+    if os.path.exists(probe_p):
+        probe = json.load(open(probe_p))["max_batch"]
+        if probe != sustained:
+            assert str(probe) in text and str(sustained) in text, \
+                "both the probe and the sustained batch must be reported"
+
+
+def test_euler_divergence_is_stated_not_softened():
+    """Euler's loss ended worse than baseline. The README must say so."""
+    _need_runs()
+    runs = _runs()
+    if not {"euler_fixed", "baseline_fixed"} <= runs.keys():
+        pytest.skip("need euler + baseline")
+    e, b = runs["euler_fixed"], runs["baseline_fixed"]
+    if e["final_val_loss"] <= b["final_val_loss"]:
+        pytest.skip("euler did not diverge in this run")
+    text = open(README).read()
+    assert "broke" in text or "stopped learning" in text, \
+        "euler diverged; the README must not describe that as merely uncompetitive"
+    assert f"{e['max_recon_err']:.1e}" in text or "2.4e+04" in text

@@ -1,0 +1,9 @@
+{
+  "mode": "euler",
+  "seq_len": 512,
+  "max_batch": 73,
+  "peak_mem_gb_at_max": 21.357740879058838,
+  "device": "NVIDIA L4",
+  "dtype": "bf16",
+  "h": 0.5
+}
