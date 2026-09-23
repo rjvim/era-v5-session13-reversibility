@@ -1,0 +1,101 @@
+{
+  "run_name": "baseline_fixed",
+  "mode": "baseline",
+  "h": null,
+  "euler_iters": null,
+  "batch_size": 8,
+  "grad_accum": 1,
+  "seq_len": 256,
+  "tokens_per_step": 2048,
+  "total_steps": 58,
+  "tokens_trained": 118784,
+  "final_train_loss": 6.584146499633789,
+  "final_val_loss": 6.499818897247314,
+  "tok_per_s": 1598.605250212312,
+  "wall_s": 74.30477285385132,
+  "peak_mem_gb": NaN,
+  "params_total": 7614720,
+  "params_non_embedding": 5318016,
+  "recon_err_log": [],
+  "max_recon_err": null,
+  "device": "x86_64",
+  "dtype": "fp32",
+  "torch": "2.14.0+cu130",
+  "seed": 1337,
+  "config": {
+    "vocab_size": 11706,
+    "block_size": 256,
+    "n_layer": 12,
+    "n_head": 6,
+    "n_embd": 192,
+    "mode": "baseline",
+    "h": 0.5,
+    "euler_iters": 8,
+    "dropout": 0.0
+  },
+  "log": [
+    {
+      "step": 0,
+      "loss": 9.393317222595215,
+      "lr": 0.0006,
+      "grad_norm": 8.289897918701172,
+      "tokens": 2048,
+      "elapsed_s": 1.5304136276245117,
+      "tok_per_s": 1338.2003159360775
+    },
+    {
+      "step": 10,
+      "loss": 7.784264087677002,
+      "lr": 0.000567457912825752,
+      "grad_norm": 2.109644651412964,
+      "tokens": 22528,
+      "elapsed_s": 14.440000057220459,
+      "tok_per_s": 1560.110797141949
+    },
+    {
+      "step": 20,
+      "loss": 7.003580570220947,
+      "lr": 0.0004649999999999999,
+      "grad_norm": 1.6158108711242676,
+      "tokens": 43008,
+      "elapsed_s": 27.152666091918945,
+      "tok_per_s": 1583.9328578050702
+    },
+    {
+      "step": 30,
+      "loss": 6.666225433349609,
+      "lr": 0.0003225603275605962,
+      "grad_norm": 1.3886070251464844,
+      "tokens": 63488,
+      "elapsed_s": 39.87238144874573,
+      "tok_per_s": 1592.2801120271974
+    },
+    {
+      "step": 40,
+      "loss": 6.757734775543213,
+      "lr": 0.00018232399730694476,
+      "grad_norm": 0.8626210689544678,
+      "tokens": 83968,
+      "elapsed_s": 52.65363645553589,
+      "tok_per_s": 1594.7236630257812
+    },
+    {
+      "step": 50,
+      "loss": 6.66371488571167,
+      "lr": 8.582356661165409e-05,
+      "grad_norm": 0.918391764163971,
+      "tokens": 104448,
+      "elapsed_s": 65.33591961860657,
+      "tok_per_s": 1598.6305941617904
+    },
+    {
+      "step": 57,
+      "loss": 6.584146499633789,
+      "lr": 6.0409990563004625e-05,
+      "grad_norm": 0.6792834997177124,
+      "tokens": 118784,
+      "elapsed_s": 74.30476450920105,
+      "tok_per_s": 1598.605429740527
+    }
+  ]
+}

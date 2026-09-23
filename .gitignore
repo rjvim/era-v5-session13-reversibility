@@ -1,0 +1,8 @@
+data/
+__pycache__/
+*.bin
+.ipynb_checkpoints/
+results_smoke/
+.pytest_cache/
+results/*.ckpt
+results_cpu/*.ckpt

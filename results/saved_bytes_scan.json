@@ -1,0 +1,43 @@
+{
+  "batch": 2,
+  "seq_len": 128,
+  "n_embd": 128,
+  "rows": [
+    {
+      "n_layer": 2,
+      "baseline_bytes": 7630852,
+      "midpoint_bytes": 1974276,
+      "euler_bytes": 1843204
+    },
+    {
+      "n_layer": 4,
+      "baseline_bytes": 13680644,
+      "midpoint_bytes": 1974276,
+      "euler_bytes": 1843204
+    },
+    {
+      "n_layer": 8,
+      "baseline_bytes": 25780228,
+      "midpoint_bytes": 1974276,
+      "euler_bytes": 1843204
+    },
+    {
+      "n_layer": 16,
+      "baseline_bytes": 49979396,
+      "midpoint_bytes": 1974276,
+      "euler_bytes": 1843204
+    },
+    {
+      "n_layer": 32,
+      "baseline_bytes": 98377732,
+      "midpoint_bytes": 1974276,
+      "euler_bytes": 1843204
+    },
+    {
+      "n_layer": 64,
+      "baseline_bytes": 195174404,
+      "midpoint_bytes": 1974276,
+      "euler_bytes": 1843204
+    }
+  ]
+}

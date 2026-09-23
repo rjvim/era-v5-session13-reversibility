@@ -1,0 +1,87 @@
+{
+  "run_name": "midpoint_max",
+  "mode": "midpoint",
+  "h": 0.5,
+  "euler_iters": null,
+  "batch_size": 16,
+  "grad_accum": 1,
+  "seq_len": 256,
+  "tokens_per_step": 4096,
+  "total_steps": 29,
+  "tokens_trained": 118784,
+  "final_train_loss": 7.392558574676514,
+  "final_val_loss": 7.2568258285522464,
+  "tok_per_s": 1291.1968959122808,
+  "wall_s": 91.99526453018188,
+  "peak_mem_gb": NaN,
+  "params_total": 7614720,
+  "params_non_embedding": 5318016,
+  "recon_err_log": [
+    [
+      0,
+      9.735787134223572e-07
+    ],
+    [
+      10,
+      5.1680515313069835e-06
+    ],
+    [
+      20,
+      8.809908776000404e-06
+    ]
+  ],
+  "max_recon_err": 8.809908776000404e-06,
+  "device": "x86_64",
+  "dtype": "fp32",
+  "torch": "2.14.0+cu130",
+  "seed": 1337,
+  "config": {
+    "vocab_size": 11706,
+    "block_size": 256,
+    "n_layer": 12,
+    "n_head": 6,
+    "n_embd": 192,
+    "mode": "midpoint",
+    "h": 0.5,
+    "euler_iters": 8,
+    "dropout": 0.0
+  },
+  "log": [
+    {
+      "step": 0,
+      "loss": 9.375433921813965,
+      "lr": 0.0006,
+      "grad_norm": 6.069261074066162,
+      "tokens": 4096,
+      "elapsed_s": 3.388730049133301,
+      "tok_per_s": 1208.7123909582558
+    },
+    {
+      "step": 10,
+      "loss": 7.902240753173828,
+      "lr": 0.0004736486606591408,
+      "grad_norm": 1.9068528413772583,
+      "tokens": 45056,
+      "elapsed_s": 34.88767457008362,
+      "tok_per_s": 1291.4589623762365
+    },
+    {
+      "step": 20,
+      "loss": 7.520107269287109,
+      "lr": 0.00018635133934085911,
+      "grad_norm": 1.734919548034668,
+      "tokens": 86016,
+      "elapsed_s": 66.73471307754517,
+      "tok_per_s": 1288.9243998104876
+    },
+    {
+      "step": 28,
+      "loss": 7.392558574676514,
+      "lr": 6.169770332882449e-05,
+      "grad_norm": 1.563862681388855,
+      "tokens": 118784,
+      "elapsed_s": 91.99525356292725,
+      "tok_per_s": 1291.197049842887
+    }
+  ]
+}
